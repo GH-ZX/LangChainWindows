@@ -1,0 +1,1 @@
+{"host": "localhost", "port": "5432", "dbname": "company_db", "user": "postgres", "pass": "admin", "model": "0ssamaak0/silma-v1:latest"}
