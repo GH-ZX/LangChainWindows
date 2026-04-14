@@ -4,5 +4,5 @@
   "dbname": "company_db",
   "user": "postgres",
   "pass": "123",
-  "model": "0ssamaak0/silma-v1:latest"
+  "model": "llama3:latest"
 }

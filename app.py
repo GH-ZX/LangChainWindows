@@ -352,6 +352,76 @@ DEFAULT_CONFIG = {
 }
 
 # =================================================================================
+# 4. إدارة محفوظات المحادثات (Chat History Manager)
+# =================================================================================
+class ChatHistoryManager:
+    def __init__(self, history_file="chat_history.json"):
+        self.history_file = history_file
+        self.ensure_history_file_exists()
+    
+    def ensure_history_file_exists(self):
+        """تأكد من وجود ملف المحفوظات، أنشئ ملفاً جديداً إن لم يكن موجوداً"""
+        if not os.path.exists(self.history_file):
+            with open(self.history_file, 'w', encoding='utf-8') as f:
+                json.dump({"conversations": []}, f, ensure_ascii=False, indent=2)
+    
+    def save_conversation(self, conversation_data):
+        """حفظ محادثة جديدة في السجل"""
+        try:
+            with open(self.history_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # إضافة المحادثة الجديدة
+            conversation_data['id'] = len(data['conversations']) + 1
+            conversation_data['timestamp'] = time.strftime("%Y-%m-%d %H:%M:%S")
+            data['conversations'].append(conversation_data)
+            
+            # حفظ البيانات المحدثة
+            with open(self.history_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            
+            print(f"تم حفظ المحادثة: {conversation_data.get('title', 'بدون عنوان')}")
+            return True
+        except Exception as e:
+            print(f"خطأ في حفظ المحادثة: {e}")
+            return False
+    
+    def load_all_conversations(self):
+        """تحميل جميع المحادثات السابقة"""
+        try:
+            with open(self.history_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return data.get('conversations', [])
+        except Exception as e:
+            print(f"خطأ في تحميل المحادثات: {e}")
+            return []
+    
+    def get_conversation_by_id(self, conv_id):
+        """الحصول على محادثة معينة بواسطة المعرف"""
+        conversations = self.load_all_conversations()
+        for conv in conversations:
+            if conv.get('id') == conv_id:
+                return conv
+        return None
+    
+    def delete_conversation(self, conv_id):
+        """حذف محادثة من السجل"""
+        try:
+            with open(self.history_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            data['conversations'] = [c for c in data['conversations'] if c.get('id') != conv_id]
+            
+            with open(self.history_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            
+            print(f"تم حذف المحادثة رقم {conv_id}")
+            return True
+        except Exception as e:
+            print(f"خطأ في حذف المحادثة: {e}")
+            return False
+
+# =================================================================================
 # 5. الواجهة الرئيسية (Main App)
 # =================================================================================
 class ModernApp(QMainWindow):
@@ -359,7 +429,7 @@ class ModernApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("نظام تحليل الموظفين")
         self.resize(900, 650)  # حجم أصغر ومتوسط
-        self.setMinimumSize(600, 500)  # حد أدنى للحجم لضمان قابلية الاستخدام
+        self.setMinimumSize(700, 500)  # حد أدنى للحجم لضمان قابلية الاستخدام
         self.settings_file = "config.json"
         
         # Initialize config file if it doesn't exist
@@ -384,6 +454,9 @@ class ModernApp(QMainWindow):
 
         # متغيرات للمحادثة العامة
         self.general_chat_history = []
+        
+        # Initialize chat history manager
+        self.history_manager = ChatHistoryManager()
 
         self.init_ui()
         self.load_settings()
@@ -620,19 +693,18 @@ class ModernApp(QMainWindow):
         sidebar_layout.addWidget(app_title)
         
         # Settings Button
-        self.btn_main_settings = self.create_nav_button("الإعدادات", "⚙️", 2)
-        sidebar_layout.addWidget(self.btn_main_settings)
-        
         sidebar_layout.addSpacing(20)
 
         # Navigation Buttons
         self.btn_chat = self.create_nav_button("تحليل البيانات", "💬", 0)
         self.btn_general = self.create_nav_button("مساعد GPT", "🤖", 1)
         self.btn_settings = self.create_nav_button("الإعدادات ", "⚙️", 2)
+        self.btn_history = self.create_nav_button("المحفوظات", "📜", 3)
 
         sidebar_layout.addWidget(self.btn_chat)
         sidebar_layout.addWidget(self.btn_general)
         sidebar_layout.addWidget(self.btn_settings)
+        sidebar_layout.addWidget(self.btn_history)
         sidebar_layout.addStretch()
 
         # Footer
@@ -666,10 +738,12 @@ class ModernApp(QMainWindow):
 
         self.page_settings = self.create_settings_page()
         self.page_general = self.create_general_chat_page()
+        self.page_history = self.create_history_page()
         
         self.stacked_widget.addWidget(main_chat_page)
         self.stacked_widget.addWidget(self.page_general)
         self.stacked_widget.addWidget(self.page_settings)
+        self.stacked_widget.addWidget(self.page_history)
 
         content_layout.addWidget(self.stacked_widget)
 
@@ -692,9 +766,14 @@ class ModernApp(QMainWindow):
         self.btn_chat.setChecked(False)
         self.btn_general.setChecked(False)
         self.btn_settings.setChecked(False)
+        self.btn_history.setChecked(False)
         btn_sender.setChecked(True)
 
-        # 2. تغيير الصفحة
+        # 2. تحديث صفحة المحفوظات قبل عرضها
+        if index == 3:
+            self.refresh_history_page()
+
+        # 3. تغيير الصفحة
         self.stacked_widget.setCurrentIndex(index)
         
         # =========================================================
@@ -883,7 +962,7 @@ class ModernApp(QMainWindow):
         header_layout.addWidget(self.btn_toggle_menu)
         # -------------------------------
 
-        header = QLabel("غرفة العمليات الرقمية")
+        header = QLabel("محادثة الاستعلام")
         header.setObjectName("HeaderTitle")
         
         self.btn_clear = QPushButton("مسح المحادثة")
@@ -1197,81 +1276,136 @@ class ModernApp(QMainWindow):
         header = QLabel("تهيئة النظام والاتصال")
         header.setObjectName("HeaderTitle")
         layout.addWidget(header)
-        layout.addSpacing(20)
+        layout.addSpacing(10)
 
         # Card Container for Settings
         settings_card = QFrame()
         settings_card.setObjectName("SettingsCard")
         settings_layout = QVBoxLayout(settings_card)
-        settings_layout.setContentsMargins(30, 30, 30, 30)
-        settings_layout.setSpacing(25)
+        settings_layout.setContentsMargins(12, 12, 12, 12)
+        settings_layout.setSpacing(10)
 
         # Fields Container
         fields_container = QWidget()
-        fields_layout = QFormLayout(fields_container)
-        fields_layout.setSpacing(15)
+        fields_layout = QVBoxLayout(fields_container)
+        fields_layout.setSpacing(6)
         fields_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Database Connection Fields
-        db_label = QLabel("قاعدة البيانات")
-        db_label.setStyleSheet("font-weight: bold; color: #C5A059;")
-        fields_layout.addRow(db_label, QWidget())  # Section label
+        # Database Connection Section
+        db_section = QLabel("🔗 إعدادات قاعدة البيانات")
+        db_section.setStyleSheet(f"font-weight: bold; color: {self.colors['accent']}; font-size: 14px; margin-bottom: 5px;")
+        fields_layout.addWidget(db_section)
 
         # Host Field
-        host_label = QLabel("عنوان السيرفر (Host):")
+        host_container = QWidget()
+        host_layout = QHBoxLayout(host_container)
+        host_layout.setContentsMargins(0, 0, 0, 0)
+        host_layout.setSpacing(6)
+        host_label = QLabel("عنوان السيرفر:")
+        host_label.setObjectName("SettingsLabel")
+        host_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         self.input_host = QLineEdit()
         self.input_host.setObjectName("SettingsInput")
         self.input_host.setPlaceholderText("مثال: localhost")
-        fields_layout.addRow(host_label, self.input_host)
+        self.input_host.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        host_layout.addWidget(host_label)
+        host_layout.addWidget(self.input_host, stretch=1)
+        fields_layout.addWidget(host_container)
 
         # Port Field
-        port_label = QLabel("المنفذ (Port):")
+        port_container = QWidget()
+        port_layout = QHBoxLayout(port_container)
+        port_layout.setContentsMargins(0, 0, 0, 0)
+        port_layout.setSpacing(6)
+        port_label = QLabel("المنفذ:")
+        port_label.setObjectName("SettingsLabel")
+        port_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         self.input_port = QLineEdit()
         self.input_port.setObjectName("SettingsInput")
         self.input_port.setPlaceholderText("مثال: 5432")
-        fields_layout.addRow(port_label, self.input_port)
+        self.input_port.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        port_layout.addWidget(port_label)
+        port_layout.addWidget(self.input_port, stretch=1)
+        fields_layout.addWidget(port_container)
 
         # Database Name Field
-        db_name_label = QLabel("اسم قاعدة البيانات:")
+        db_container = QWidget()
+        db_layout = QHBoxLayout(db_container)
+        db_layout.setContentsMargins(0, 0, 0, 0)
+        db_layout.setSpacing(6)
+        db_label = QLabel("اسم قاعدة البيانات:")
+        db_label.setObjectName("SettingsLabel")
+        db_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         self.input_db = QLineEdit()
         self.input_db.setObjectName("SettingsInput")
         self.input_db.setPlaceholderText("مثال: company_db")
-        fields_layout.addRow(db_name_label, self.input_db)
+        self.input_db.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        db_layout.addWidget(db_label)
+        db_layout.addWidget(self.input_db, stretch=1)
+        fields_layout.addWidget(db_container)
 
         # User Field
-        user_label = QLabel("المستخدم (User):")
+        user_container = QWidget()
+        user_layout = QHBoxLayout(user_container)
+        user_layout.setContentsMargins(0, 0, 0, 0)
+        user_layout.setSpacing(6)
+        user_label = QLabel("المستخدم:")
+        user_label.setObjectName("SettingsLabel")
+        user_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         self.input_user = QLineEdit()
         self.input_user.setObjectName("SettingsInput")
         self.input_user.setPlaceholderText("مثال: postgres")
-        fields_layout.addRow(user_label, self.input_user)
+        self.input_user.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        user_layout.addWidget(user_label)
+        user_layout.addWidget(self.input_user, stretch=1)
+        fields_layout.addWidget(user_container)
 
         # Password Field
-        pass_label = QLabel("كلمة المرور (Password):")
+        pass_container = QWidget()
+        pass_layout = QHBoxLayout(pass_container)
+        pass_layout.setContentsMargins(0, 0, 0, 0)
+        pass_layout.setSpacing(6)
+        pass_label = QLabel("كلمة المرور:")
+        pass_label.setObjectName("SettingsLabel")
+        pass_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         self.input_pass = QLineEdit()
         self.input_pass.setObjectName("SettingsInput")
         self.input_pass.setEchoMode(QLineEdit.Password)
         self.input_pass.setPlaceholderText("أدخل كلمة المرور")
-        fields_layout.addRow(pass_label, self.input_pass)
+        self.input_pass.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        pass_layout.addWidget(pass_label)
+        pass_layout.addWidget(self.input_pass, stretch=1)
+        fields_layout.addWidget(pass_container)
 
         # AI Model Section
-        fields_layout.addRow(QWidget(), QWidget())  # Spacer
-        ai_label = QLabel("نموذج الذكاء الاصطناعي")
-        ai_label.setStyleSheet("font-weight: bold; color: #C5A059;")
-        fields_layout.addRow(ai_label, QWidget())  # Section label
+        fields_layout.addSpacing(8)
+        ai_section = QLabel("🤖 نموذج الذكاء الاصطناعي")
+        ai_section.setStyleSheet(f"font-weight: bold; color: {self.colors['accent']}; font-size: 14px; margin-bottom: 5px;")
+        fields_layout.addWidget(ai_section)
 
         # Model Field
+        model_container = QWidget()
+        model_layout = QHBoxLayout(model_container)
+        model_layout.setContentsMargins(0, 0, 0, 0)
+        model_layout.setSpacing(6)
         model_label = QLabel("نموذج AI:")
+        model_label.setObjectName("SettingsLabel")
+        model_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         self.combo_model = QComboBox()
         self.combo_model.setObjectName("SettingsCombo")
-        fields_layout.addRow(model_label, self.combo_model)
+        self.combo_model.setMinimumHeight(28)
+        self.combo_model.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        model_layout.addWidget(model_label)
+        model_layout.addWidget(self.combo_model, stretch=1)
+        fields_layout.addWidget(model_container)
 
         settings_layout.addWidget(fields_container)
 
         layout.addWidget(settings_card)
-        layout.addSpacing(20)
+        layout.addSpacing(8)
 
         # Save Button
-        btn_save = QPushButton("💾 حفظ التغييرات وإعادة التشغيل")
+        btn_save = QPushButton("حفظ التغييرات وإعادة التشغيل")
         btn_save.setObjectName("SaveButton")
         btn_save.setCursor(Qt.PointingHandCursor)
         btn_save.clicked.connect(self.save_settings)
@@ -1279,6 +1413,113 @@ class ModernApp(QMainWindow):
         
         layout.addStretch()
         return page
+
+    def create_history_page(self):
+        """إنشاء صفحة المحفوظات"""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setAlignment(Qt.AlignTop)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
+        # Header
+        header = QLabel("سجل المحادثات السابقة")
+        header.setObjectName("HeaderTitle")
+        header.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {self.colors['accent']};")
+        layout.addWidget(header)
+        
+        # Store reference to scroll area for refresh
+        self.history_scroll = QScrollArea()
+        self.history_scroll.setWidgetResizable(True)
+        self.history_scroll.setStyleSheet(f"""
+            QScrollArea {{
+                border: none;
+                background-color: {self.colors['bg_main']};
+            }}
+        """)
+        
+        # Content will be filled by refresh_history_page
+        self.history_content_widget = QWidget()
+        self.history_content_layout = QVBoxLayout(self.history_content_widget)
+        self.history_scroll.setWidget(self.history_content_widget)
+        
+        layout.addWidget(self.history_scroll)
+        layout.addStretch()
+        
+        return page
+    
+    def refresh_history_page(self):
+        """تحديث محتوى صفحة المحفوظات"""
+        # مسح المحتوى القديم
+        while self.history_content_layout.count():
+            item = self.history_content_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Load conversations
+        conversations = self.history_manager.load_all_conversations()
+        
+        if not conversations:
+            empty_label = QLabel("لا توجد محادثات مسجلة بعد")
+            empty_label.setAlignment(Qt.AlignCenter)
+            empty_label.setStyleSheet("color: #AAAAAA; font-size: 14px;")
+            self.history_content_layout.addWidget(empty_label)
+        else:
+            for conv in reversed(conversations):  # عرض الأحدث أولاً
+                conv_frame = QFrame()
+                conv_frame.setObjectName("SettingsCard")
+                conv_layout = QVBoxLayout(conv_frame)
+                conv_layout.setContentsMargins(15, 12, 15, 12)
+                
+                # Title and timestamp
+                header_layout = QHBoxLayout()
+                title = QLabel(conv.get('title', 'محادثة بدون عنوان'))
+                title.setStyleSheet(f"font-weight: bold; color: {self.colors['accent']}; font-size: 13px;")
+                timestamp = QLabel(conv.get('timestamp', ''))
+                timestamp.setStyleSheet(f"color: {self.colors['text_dim']}; font-size: 10px;")
+                timestamp.setAlignment(Qt.AlignLeft)
+                
+                header_layout.addWidget(title)
+                header_layout.addStretch()
+                header_layout.addWidget(timestamp)
+                conv_layout.addLayout(header_layout)
+                
+                # Message preview
+                if conv.get('messages'):
+                    preview = conv.get('messages', [{}])[0].get('content', '')
+                    if len(preview) > 80:
+                        preview = preview[:80] + "..."
+                    preview_label = QLabel(preview)
+                    preview_label.setStyleSheet(f"color: {self.colors['text_dim']}; font-size: 11px;")
+                    preview_label.setWordWrap(True)
+                    conv_layout.addWidget(preview_label)
+                
+                # Buttons layout
+                buttons_layout = QHBoxLayout()
+                
+                # Load button
+                load_btn = QPushButton("تحميل")
+                load_btn.setObjectName("SaveButton")
+                load_btn.setCursor(Qt.PointingHandCursor)
+                load_btn.setMaximumWidth(100)
+                load_btn.clicked.connect(lambda checked, c=conv: self.load_conversation(c))
+                
+                # Delete button
+                delete_btn = QPushButton("حذف")
+                delete_btn.setObjectName("SaveButton")
+                delete_btn.setCursor(Qt.PointingHandCursor)
+                delete_btn.setMaximumWidth(100)
+                delete_btn.setStyleSheet(f"background-color: #c74444;")
+                delete_btn.clicked.connect(lambda checked, c=conv: self.delete_conversation_item(c))
+                
+                buttons_layout.addStretch()
+                buttons_layout.addWidget(load_btn)
+                buttons_layout.addWidget(delete_btn)
+                conv_layout.addLayout(buttons_layout)
+                
+                self.history_content_layout.addWidget(conv_frame)
+        
+        self.history_content_layout.addStretch()
 
     def trigger_ollama_load(self):
         # هذه الدالة تستدعى لتشغيل الموديل في الخلفية
@@ -1301,10 +1542,7 @@ class ModernApp(QMainWindow):
         
         # رسالة في الشات تخبر المستخدم
         welcome_msg = """مرحباً بك في نظام التحليل الذكي
-تأكد من:
-• تشغيل Ollama: ollama serve
-• تحميل النموذج: ollama pull llama3
-• توفر قاعدة البيانات PostgreSQL"""
+• يجب وجود قاعدة بيانات PostgreSQL ووضع بياناتها في الإعدادات"""
         self.add_bubble(welcome_msg, "system")
         self.add_bubble(f"جاري تهيئة الموديل {model}...", "loading")
 
@@ -1670,8 +1908,13 @@ class ModernApp(QMainWindow):
         # 2. إضافة رد البوت للشات العام
         self.add_general_bubble(response, "bot")
         
-        # 3. حفظ في التاريخ
+        # 3. حفظ في التاريخ وحفظ المحادثة الحالية
         self.general_chat_history.append({"role": "assistant", "content": response})
+        
+        # حفظ تلقائي للمحادثة الحالية
+        if len(self.general_chat_history) > 0 and len(self.general_chat_history) % 2 == 0:  # حفظ كل زوج من الرسائل
+            first_user_msg = next((msg['content'][:50] for msg in self.general_chat_history if msg['role'] == 'user'), "محادثة عامة")
+            self.save_current_conversation(f"محادثة: {first_user_msg}")
         
         # 4. إعادة تفعيل الزر
         self.general_btn_send.setEnabled(True)
@@ -1780,30 +2023,50 @@ class ModernApp(QMainWindow):
             border: 1px solid #444;
         }}
         QLabel#SettingsLabel {{
-            color: {self.colors['accent']};
-            font-size: 14px;
+            color: {self.colors['text']};
+            font-size: 10px;
             font-weight: bold;
-            min-width: 180px;
+            min-width: 75px;
             text-align: right;
+            padding-right: 4px;
         }}
         QLineEdit#SettingsInput, QComboBox#SettingsCombo {{
-            background-color: #002b28;
+            background-color: {self.colors['bg_dark']};
             color: white;
             border: 1px solid #555;
-            border-radius: 8px;
-            padding: 10px 15px;
-            font-size: 14px;
+            border-radius: 6px;
+            padding: 5px 8px;
+            font-size: 10px;
             font-family: "Segoe UI", "Arial", sans-serif;
-            min-height: 45px;
+            min-height: 28px;
             selection-background-color: {self.colors['accent']};
             selection-color: black;
         }}
         QLineEdit#SettingsInput:focus, QComboBox#SettingsCombo:focus {{
             border: 2px solid {self.colors['accent']};
         }}
+        QComboBox#SettingsCombo {{
+            padding-right: 20px; /* Space for dropdown arrow */
+        }}
         QComboBox#SettingsCombo::drop-down {{
             border: none;
             background: transparent;
+            width: 20px;
+        }}
+        QComboBox#SettingsCombo::down-arrow {{
+            image: none;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 4px solid {self.colors['text']};
+            margin-right: 5px;
+        }}
+        QComboBox#SettingsCombo QAbstractItemView {{
+            background-color: {self.colors['bg_dark']};
+            color: white;
+            border: 1px solid {self.colors['accent']};
+            border-radius: 4px;
+            selection-background-color: {self.colors['accent']};
+            selection-color: black;
         }}
 
         /* --- Chat Area --- */
@@ -1841,10 +2104,12 @@ class ModernApp(QMainWindow):
             background-color: {self.colors['accent']};
             color: #002b28;
             font-weight: bold;
-            font-size: 15px;
-            border-radius: 25px;
-            padding: 12px 35px;
+            font-size: 11px;
+            border-radius: 14px;
+            padding: 5px 16px;
             border: 2px solid {self.colors['accent']};
+            min-width: 140px;
+            max-width: 180px;
         }}
         QPushButton#SendButton:hover, QPushButton#SaveButton:hover {{
             background-color: {self.colors['accent_hover']};
@@ -1926,6 +2191,66 @@ class ModernApp(QMainWindow):
         }}
         """
         self.setStyleSheet(css)
+    
+    def load_conversation(self, conversation):
+        """تحميل محادثة سابقة"""
+        try:
+            # تحميل المحادثة في الواجهة
+            if conversation.get('type') == 'general_chat' and conversation.get('messages'):
+                # تحميل محادثة عامة
+                self.btn_general.click()  # الذهاب لصفحة المحادثة العامة
+                self.general_chat_history = conversation.get('messages', [])
+                
+                # إعادة عرض المحادثة
+                QApplication.processEvents()
+                
+                # مسح المحتوى الحالي
+                for i in range(self.general_chat_layout.count()):
+                    item = self.general_chat_layout.itemAt(0)
+                    if item.widget():
+                        item.widget().deleteLater()
+                
+                # إعادة عرض الرسائل
+                for msg in self.general_chat_history:
+                    bubble_type = "user" if msg.get('role') == 'user' else "bot"
+                    self.add_general_bubble(msg.get('content', ''), bubble_type)
+                
+                QMessageBox.information(self, "نجاح", "تم تحميل المحادثة بنجاح!")
+            else:
+                QMessageBox.warning(self, "تنبيه", "لا يمكن تحميل هذه المحادثة")
+        except Exception as e:
+            QMessageBox.critical(self, "خطأ", f"فشل تحميل المحادثة: {str(e)}")
+    
+    def delete_conversation_item(self, conversation):
+        """حذف محادثة من السجل"""
+        reply = QMessageBox.question(
+            self,
+            "تأكيد الحذف",
+            f"هل أنت متأكد من حذف المحادثة:\n{conversation.get('title', 'بدون عنوان')}؟",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            if self.history_manager.delete_conversation(conversation.get('id')):
+                QMessageBox.information(self, "نجاح", "تم حذف المحادثة")
+                # إعادة تحميل صفحة المحفوظات
+                self.refresh_history_page()
+            else:
+                QMessageBox.critical(self, "خطأ", "فشل حذف المحادثة")
+    
+    def save_current_conversation(self, title="محادثة عامة"):
+        """حفظ المحادثة الحالية إلى السجل"""
+        try:
+            conversation_data = {
+                "title": title,
+                "type": "general_chat",
+                "messages": self.general_chat_history
+            }
+            self.history_manager.save_conversation(conversation_data)
+            return True
+        except Exception as e:
+            print(f"خطأ في حفظ المحادثة: {e}")
+            return False
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
