@@ -340,6 +340,18 @@ class SuggestionButton(QPushButton):
             }}
         """)
 # =================================================================================
+# 4. الإعدادات الافتراضية (Default Configuration)
+# =================================================================================
+DEFAULT_CONFIG = {
+    "host": "localhost",
+    "port": "5432",
+    "dbname": "company_db",
+    "user": "postgres",
+    "pass": "admin",
+    "model": "llama3"
+}
+
+# =================================================================================
 # 5. الواجهة الرئيسية (Main App)
 # =================================================================================
 class ModernApp(QMainWindow):
@@ -349,6 +361,9 @@ class ModernApp(QMainWindow):
         self.resize(900, 650)  # حجم أصغر ومتوسط
         self.setMinimumSize(600, 500)  # حد أدنى للحجم لضمان قابلية الاستخدام
         self.settings_file = "config.json"
+        
+        # Initialize config file if it doesn't exist
+        self.ensure_config_exists()
         
         # Set layout direction for Arabic support
         self.setLayoutDirection(Qt.RightToLeft)
@@ -1193,82 +1208,62 @@ class ModernApp(QMainWindow):
 
         # Fields Container
         fields_container = QWidget()
-        fields_layout = QVBoxLayout(fields_container)
-        fields_layout.setSpacing(20)
+        fields_layout = QFormLayout(fields_container)
+        fields_layout.setSpacing(15)
+        fields_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Database Connection Fields
+        db_label = QLabel("قاعدة البيانات")
+        db_label.setStyleSheet("font-weight: bold; color: #C5A059;")
+        fields_layout.addRow(db_label, QWidget())  # Section label
 
         # Host Field
-        host_container = QWidget()
-        host_layout = QHBoxLayout(host_container)
-        host_layout.setContentsMargins(0, 0, 0, 0)
-        host_label = QLabel("عنوان السيرفر (Host IP):")
-        host_label.setObjectName("SettingsLabel")
+        host_label = QLabel("عنوان السيرفر (Host):")
         self.input_host = QLineEdit()
         self.input_host.setObjectName("SettingsInput")
-        host_layout.addWidget(host_label)
-        host_layout.addWidget(self.input_host)
-        fields_layout.addWidget(host_container)
+        self.input_host.setPlaceholderText("مثال: localhost")
+        fields_layout.addRow(host_label, self.input_host)
 
         # Port Field
-        port_container = QWidget()
-        port_layout = QHBoxLayout(port_container)
-        port_layout.setContentsMargins(0, 0, 0, 0)
         port_label = QLabel("المنفذ (Port):")
-        port_label.setObjectName("SettingsLabel")
         self.input_port = QLineEdit()
         self.input_port.setObjectName("SettingsInput")
-        port_layout.addWidget(port_label)
-        port_layout.addWidget(self.input_port)
-        fields_layout.addWidget(port_container)
+        self.input_port.setPlaceholderText("مثال: 5432")
+        fields_layout.addRow(port_label, self.input_port)
 
-        # Database Field
-        db_container = QWidget()
-        db_layout = QHBoxLayout(db_container)
-        db_layout.setContentsMargins(0, 0, 0, 0)
-        db_label = QLabel("قاعدة البيانات (DB Name):")
-        db_label.setObjectName("SettingsLabel")
+        # Database Name Field
+        db_name_label = QLabel("اسم قاعدة البيانات:")
         self.input_db = QLineEdit()
         self.input_db.setObjectName("SettingsInput")
-        db_layout.addWidget(db_label)
-        db_layout.addWidget(self.input_db)
-        fields_layout.addWidget(db_container)
+        self.input_db.setPlaceholderText("مثال: company_db")
+        fields_layout.addRow(db_name_label, self.input_db)
 
         # User Field
-        user_container = QWidget()
-        user_layout = QHBoxLayout(user_container)
-        user_layout.setContentsMargins(0, 0, 0, 0)
         user_label = QLabel("المستخدم (User):")
-        user_label.setObjectName("SettingsLabel")
         self.input_user = QLineEdit()
         self.input_user.setObjectName("SettingsInput")
-        user_layout.addWidget(user_label)
-        user_layout.addWidget(self.input_user)
-        fields_layout.addWidget(user_container)
+        self.input_user.setPlaceholderText("مثال: postgres")
+        fields_layout.addRow(user_label, self.input_user)
 
         # Password Field
-        pass_container = QWidget()
-        pass_layout = QHBoxLayout(pass_container)
-        pass_layout.setContentsMargins(0, 0, 0, 0)
         pass_label = QLabel("كلمة المرور (Password):")
-        pass_label.setObjectName("SettingsLabel")
         self.input_pass = QLineEdit()
         self.input_pass.setObjectName("SettingsInput")
         self.input_pass.setEchoMode(QLineEdit.Password)
-        pass_layout.addWidget(pass_label)
-        pass_layout.addWidget(self.input_pass)
-        fields_layout.addWidget(pass_container)
+        self.input_pass.setPlaceholderText("أدخل كلمة المرور")
+        fields_layout.addRow(pass_label, self.input_pass)
+
+        # AI Model Section
+        fields_layout.addRow(QWidget(), QWidget())  # Spacer
+        ai_label = QLabel("نموذج الذكاء الاصطناعي")
+        ai_label.setStyleSheet("font-weight: bold; color: #C5A059;")
+        fields_layout.addRow(ai_label, QWidget())  # Section label
 
         # Model Field
-        model_container = QWidget()
-        model_layout = QHBoxLayout(model_container)
-        model_layout.setContentsMargins(0, 0, 0, 0)
-        model_label = QLabel("نموذج الذكاء (AI Model):")
-        model_label.setObjectName("SettingsLabel")
+        model_label = QLabel("نموذج AI:")
         self.combo_model = QComboBox()
         self.combo_model.setObjectName("SettingsCombo")
-        # Models will be loaded dynamically
-        model_layout.addWidget(model_label)
-        model_layout.addWidget(self.combo_model)
-        fields_layout.addWidget(model_container)
+        fields_layout.addRow(model_label, self.combo_model)
 
         settings_layout.addWidget(fields_container)
 
@@ -1276,7 +1271,7 @@ class ModernApp(QMainWindow):
         layout.addSpacing(20)
 
         # Save Button
-        btn_save = QPushButton("حفظ التغييرات وإعادة التشغيل")
+        btn_save = QPushButton("💾 حفظ التغييرات وإعادة التشغيل")
         btn_save.setObjectName("SaveButton")
         btn_save.setCursor(Qt.PointingHandCursor)
         btn_save.clicked.connect(self.save_settings)
@@ -1374,32 +1369,42 @@ class ModernApp(QMainWindow):
             "model": self.combo_model.currentText()
         }
         with open(self.settings_file, 'w') as f:
-            json.dump(data, f)
+            json.dump(data, f, indent=2)
         
         QMessageBox.information(self, "نجاح", "تم حفظ الإعدادات. سيتم إعادة تهيئة الموديل الآن.")
         self.trigger_ollama_load()
 
+    def ensure_config_exists(self):
+        """تأكد من وجود ملف الإعدادات وإنشاؤه بالقيم الافتراضية إن لم يكن موجوداً"""
+        if not os.path.exists(self.settings_file):
+            try:
+                with open(self.settings_file, 'w') as f:
+                    json.dump(DEFAULT_CONFIG, f, indent=2)
+                print(f"تم إنشاء ملف الإعدادات: {self.settings_file}")
+            except Exception as e:
+                print(f"تحذير: فشل إنشاء ملف الإعدادات: {e}")
+
     def load_settings(self):
-        # Set default values first
-        self.input_host.setText("localhost")
-        self.input_port.setText("5432")
-        self.input_db.setText("company_db")
-        self.input_user.setText("postgres")
-        self.input_pass.setText("")
-        default_model = "llama3"
+        # Set default values first using centralized defaults
+        self.input_host.setText(DEFAULT_CONFIG["host"])
+        self.input_port.setText(DEFAULT_CONFIG["port"])
+        self.input_db.setText(DEFAULT_CONFIG["dbname"])
+        self.input_user.setText(DEFAULT_CONFIG["user"])
+        self.input_pass.setText(DEFAULT_CONFIG["pass"])
+        default_model = DEFAULT_CONFIG["model"]
         
         if os.path.exists(self.settings_file):
             try:
                 with open(self.settings_file, 'r') as f:
                     data = json.load(f)
-                    self.input_host.setText(data.get("host", "localhost"))
-                    self.input_port.setText(data.get("port", "5432"))
-                    self.input_db.setText(data.get("dbname", "company_db"))
-                    self.input_user.setText(data.get("user", "postgres"))
-                    self.input_pass.setText(data.get("pass", ""))
-                    default_model = data.get("model", "llama3")
-            except: 
-                pass # Keep default values if config is corrupted or empty
+                    self.input_host.setText(data.get("host", DEFAULT_CONFIG["host"]))
+                    self.input_port.setText(data.get("port", DEFAULT_CONFIG["port"]))
+                    self.input_db.setText(data.get("dbname", DEFAULT_CONFIG["dbname"]))
+                    self.input_user.setText(data.get("user", DEFAULT_CONFIG["user"]))
+                    self.input_pass.setText(data.get("pass", DEFAULT_CONFIG["pass"]))
+                    default_model = data.get("model", DEFAULT_CONFIG["model"])
+            except Exception as e:
+                print(f"تحذير: فشل تحميل الإعدادات: {e}") # Keep default values if config is corrupted
         
         # Update model combo with available models
         available_models = self.get_available_models()

@@ -30,8 +30,35 @@ def check_model():
 
 def check_database():
     try:
+        import json
+        import os
+        
+        # Load configuration from config.json if available
+        config_file = "config.json"
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+            except:
+                config = {
+                    "host": "localhost",
+                    "port": "5432",
+                    "dbname": "company_db",
+                    "user": "postgres",
+                    "pass": "admin"
+                }
+        else:
+            config = {
+                "host": "localhost",
+                "port": "5432",
+                "dbname": "company_db",
+                "user": "postgres",
+                "pass": "admin"
+            }
+        
         from sqlalchemy import create_engine
-        engine = create_engine("postgresql+psycopg2://postgres:admin@localhost:5432/company_db")
+        db_uri = f"postgresql+psycopg2://{config['user']}:{config['pass']}@{config['host']}:{config['port']}/{config['dbname']}"
+        engine = create_engine(db_uri)
         connection = engine.connect()
         connection.close()
         print("✅ Database connection successful")
